@@ -29,7 +29,7 @@ def get_db():
     if _db is not None:
         return _db
     try:
-        _client = MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=100)
+        _client = MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=5000)
         _client.admin.command('ping')
         _db = _client[settings.MONGODB_DB_NAME]
         _db.tokens.create_index([('clinic_id', ASCENDING), ('status', ASCENDING)])
