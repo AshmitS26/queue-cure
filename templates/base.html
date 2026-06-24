@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Queue Cure '26{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="logo">
+        <span class="logo-icon">🩺</span>
+        Queue Cure
+      </a>
+      <div class="nav-links">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/checkin/" class="nav-link">Patient</a>
+        <a href="/receptionist/" class="nav-link">Reception</a>
+        <a href="/doctor/" class="nav-link">Doctor</a>
+        <a href="/demo/" class="btn btn-primary btn-sm" style="margin-left:4px">🎯 Demo</a>
+      </div>
+    </div>
+  </nav>
+  <main class="container">{% block content %}{% endblock %}</main>
+  <footer><div class="container">Built for <a href="https://wooble.org/hackathon/queue-cure-26" target="_blank">Queue Cure '26</a> · Real-time clinic queues for India's 1.5M clinics</div></footer>
+  <div id="toast-container"></div>
+  <script>
+    window.toast=function(m,t='info',d=3000){const e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;document.getElementById('toast-container').appendChild(e);setTimeout(()=>{e.style.opacity='0';e.style.transform='translateX(100%)';e.style.transition='all .3s';setTimeout(()=>e.remove(),300)},d)};
+    window.fmtTime=function(iso){if(!iso)return'—';try{return new Date(iso).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}catch{return'—'}};
+    window.escHtml=function(s){return(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

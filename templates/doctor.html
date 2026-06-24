@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% block title %}Dr. {{ doctor.name }} · Queue Cure{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ doctor.name }}</h1>
+    <p class="page-subtitle">{{ doctor.specialty }} · Room {{ doctor.room }} · {{ clinic.name }}</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="conn" id="conn"><span class="dot"></span><span>Connecting</span></span>
+    <a href="/logout/doctor/" class="btn btn-ghost btn-sm" onclick="return confirm('Log out?')">🚪 Logout</a>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-label">Today Total</div><div class="stat-value" id="s-total">0</div></div>
+  <div class="stat-card"><div class="stat-label">Seen</div><div class="stat-value" id="s-seen">0</div></div>
+  <div class="stat-card"><div class="stat-label">Waiting</div><div class="stat-value" id="s-waiting">0</div></div>
+  <div class="stat-card"><div class="stat-label">No Shows</div><div class="stat-value" id="s-noshow">0</div></div>
+  <div class="stat-card"><div class="stat-label">Avg Time (EMA)</div><div class="stat-value" id="s-ema">{{ doctor.ema_avg }}<span class="stat-unit"> min</span></div></div>
+</div>
+
+<div class="grid grid-2">
+  <!-- Current consult -->
+  <div>
+    <div class="now-serving" id="ns-card">
+      <div class="label">▶ Currently Consulting</div>
+      <div class="token" id="ns-token">—</div>
+      <div class="name" id="ns-name">No patient called yet</div>
+
+      <div id="notes-section" style="display:none;margin-top:16px">
+        <label style="font-size:12px;font-weight:600;opacity:.85;display:block;margin-bottom:6px">Quick Notes</label>
+        <textarea id="consult-notes" class="form-input" rows="3" placeholder="e.g. Mild fever, Paracetamol 500mg" style="background:rgba(255,255,255,.95);color:var(--text)"></textarea>
+      </div>
+
+      <div class="actions" style="margin-top:18px">
+        <button class="btn" id="btn-done" disabled onclick="markDone()">✓ Mark Done</button>
+        <button class="btn" id="btn-next" onclick="callNext()">⏭️ Call Next</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="card-title">⚡ Progress Today</div>
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);margin-bottom:5px">
+          <span>Completion</span><span id="prog-label">0 / 0</span>
+        </div>
+        <div style="height:8px;background:var(--bg-soft);border-radius:999px;overflow:hidden">
+          <div id="prog-fill" style="height:100%;background:var(--gradient);width:0%;transition:width .4s"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:12px;background:var(--bg-soft);border-radius:var(--radius-sm);font-size:12px;color:var(--text-soft)">
+        💡 EMA recalculates after every patient. Current: <strong id="ema-inline">{{ doctor.ema_avg }} min</strong> per patient (α=0.3)
+      </div>
+    </div>
+  </div>
+
+  <!-- Up next -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-title" style="margin:0">📋 Up Next</div>
+      <span class="badge badge-info" id="q-count">0 waiting</span>
+    </div>
+    <div class="queue-list" id="qlist">
+      <div class="empty"><div class="icon">🌿</div>Queue is empty</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DID = "{{ doctor.doctor_id }}";
+const CID = "{{ doctor.clinic_id }}";
+let currentCalled = null;
+
+async function callNext() {
+  try {
+    const r = await fetch(`/api/next/${CID}/${DID}/`, { method: 'POST' });
+    const j = await r.json();
+    if (j.success && j.called) toast(`Now seeing ${j.called.patient_name}`, 'success');
+    else toast('Queue empty', 'warning');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+async function markDone() {
+  if (!currentCalled) return;
+  const notes = document.getElementById('consult-notes').value.trim();
+  try {
+    await fetch(`/api/done/${CID}/${DID}/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ notes }),
+    });
+    document.getElementById('consult-notes').value = '';
+    toast('Patient done. EMA updated.', 'success');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+async function refreshStats() {
+  try {
+    const r = await fetch(`/api/stats/${CID}/${DID}/`);
+    const s = await r.json();
+    document.getElementById('s-total').textContent = s.total_today;
+    document.getElementById('s-seen').textContent = s.seen;
+    document.getElementById('s-waiting').textContent = s.waiting;
+    document.getElementById('s-noshow').textContent = s.no_shows;
+    document.getElementById('s-ema').innerHTML = `${s.ema_avg}<span class="stat-unit"> min</span>`;
+    document.getElementById('ema-inline').textContent = s.ema_avg + ' min';
+    const pct = s.total_today > 0 ? Math.round(s.seen / s.total_today * 100) : 0;
+    document.getElementById('prog-fill').style.width = pct + '%';
+    document.getElementById('prog-label').textContent = `${s.seen} / ${s.total_today}`;
+  } catch(e) {}
+}
+
+function render(data) {
+  const queue = data.queue || [];
+  const cur = data.current_called;
+  currentCalled = cur;
+
+  if (cur) {
+    document.getElementById('ns-token').textContent = cur.token_id;
+    document.getElementById('ns-name').textContent = cur.patient_name;
+    document.getElementById('btn-done').disabled = false;
+    document.getElementById('notes-section').style.display = 'block';
+  } else {
+    document.getElementById('ns-token').textContent = '—';
+    document.getElementById('ns-name').textContent = 'No patient called yet';
+    document.getElementById('btn-done').disabled = true;
+    document.getElementById('notes-section').style.display = 'none';
+  }
+
+  document.getElementById('q-count').textContent = `${queue.length} waiting`;
+  const el = document.getElementById('qlist');
+  if (!queue.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🌿</div>Queue is empty</div>';
+  } else {
+    el.innerHTML = queue.map((t, i) => `<div class="queue-item">
+      <div class="queue-position">${i+1}</div>
+      <div class="queue-info">
+        <div class="queue-name">${escHtml(t.patient_name)}</div>
+        <div class="queue-meta">${t.token_id} · ${fmtTime(t.check_in_time)}</div>
+      </div>
+    </div>`).join('');
+  }
+  refreshStats();
+}
+
+// WebSocket
+let ws, rd = 1000;
+function connect() {
+  const proto = location.protocol==='https:'?'wss:':'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/queue/${CID}/${DID}/`);
+  ws.onopen = () => {
+    const c=document.getElementById('conn');c.classList.add('is-live');c.classList.remove('is-off');
+    c.querySelector('span:last-child').textContent='Live';rd=1000;
+  };
+  ws.onmessage = e => { try{const d=JSON.parse(e.data);if(d.type==='queue_update')render(d)}catch(err){} };
+  ws.onclose = () => {
+    const c=document.getElementById('conn');c.classList.remove('is-live');c.classList.add('is-off');
+    c.querySelector('span:last-child').textContent='Reconnecting';
+    setTimeout(connect,rd);rd=Math.min(rd*1.5,10000);
+  };
+  ws.onerror = () => ws.close();
+}
+connect();
+refreshStats();
+setInterval(refreshStats, 15000);
+</script>
+{% endblock %}

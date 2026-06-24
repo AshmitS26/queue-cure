@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}Check In · Queue Cure{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Patient Check-In</h1>
+    <p class="page-subtitle">{{ clinic.name }} · No login required</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <!-- Form -->
+  <div class="card" id="checkin-card">
+    <div class="card-title">📝 Get Your Token</div>
+    <p class="card-subtitle">Fill in your details. You'll receive a digital token instantly.</p>
+
+    <form id="checkin-form">
+      <input type="hidden" name="clinic_id" value="{{ clinic.clinic_id }}">
+
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" class="form-input" id="patient_name" required placeholder="e.g. Priya Sharma" autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <input type="tel" class="form-input" id="phone" required placeholder="10-digit mobile" pattern="[0-9]{10}" autocomplete="tel">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Select Doctor</label>
+        <select class="form-select" id="doctor_id" required>
+          <option value="" disabled>Choose a doctor...</option>
+          {% for d in doctors %}
+          <option value="{{ d.doctor_id }}" data-fees="{{ d.fees }}" data-room="{{ d.room }}" {% if d.doctor_id == preselected_doctor %}selected{% endif %}>
+            {{ d.letter }}) {{ d.name }} — {{ d.specialty }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Consultation Fees</label>
+        <input type="text" class="form-input" id="fees_display" readonly value="Select a doctor">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Payment Method</label>
+        <div class="pay-toggle" id="pay-toggle">
+          <div class="pay-option" data-val="cash" onclick="selectPay(this)">💵 Cash</div>
+          <div class="pay-option" data-val="upi" onclick="selectPay(this)">📲 UPI</div>
+          <div class="pay-option" data-val="online" onclick="selectPay(this)">💳 Online</div>
+        </div>
+        <input type="hidden" id="payment_method" value="">
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="submit-btn" disabled>
+        Pay & Get Token →
+      </button>
+    </form>
+  </div>
+
+  <!-- Token result (hidden initially) -->
+  <div id="token-result" style="display:none">
+    <div class="token-display">
+      <div style="font-size:14px;opacity:.85;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Your Token</div>
+      <div class="token-big" id="result-token">—</div>
+      <div style="margin-top:16px;font-size:16px;opacity:.9" id="result-doctor">—</div>
+      <div style="margin-top:8px;font-size:15px;opacity:.85" id="result-room">—</div>
+    </div>
+    <div class="card" style="margin-top:16px;text-align:center">
+      <p style="font-size:15px;margin-bottom:16px">📍 Track your live position and wait time</p>
+      <a id="track-link" href="#" class="btn btn-primary btn-lg">Track My Queue →</a>
+    </div>
+  </div>
+
+  <!-- Info panel (shown initially, hidden after token) -->
+  <div id="info-panel" class="card" style="background:var(--gradient-soft);border:none">
+    <div class="card-title">💡 How it works</div>
+    <ul style="list-style:none;padding:0;margin-top:14px">
+      <li style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;gap:12px">
+        <span style="font-size:20px">🎟️</span>
+        <div><strong>Instant token</strong><br><span style="color:var(--text-soft);font-size:13px">Like A-02, B-07 — letter = your doctor</span></div>
+      </li>
+      <li style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;gap:12px">
+        <span style="font-size:20px">📍</span>
+        <div><strong>Live position</strong><br><span style="color:var(--text-soft);font-size:13px">Updates in real-time via WebSocket</span></div>
+      </li>
+      <li style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;gap:12px">
+        <span style="font-size:20px">⏱️</span>
+        <div><strong>Smart wait estimate</strong><br><span style="color:var(--text-soft);font-size:13px">Uses EMA of doctor's actual pace</span></div>
+      </li>
+      <li style="padding:12px 0;display:flex;gap:12px">
+        <span style="font-size:20px">🔔</span>
+        <div><strong>Browser notification</strong><br><span style="color:var(--text-soft);font-size:13px">Pings when you're 2 away</span></div>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const doctorSelect = document.getElementById('doctor_id');
+const feesDisplay = document.getElementById('fees_display');
+const submitBtn = document.getElementById('submit-btn');
+let selectedPayment = '';
+
+// Auto-fill fees on doctor change
+doctorSelect.addEventListener('change', function() {
+  const opt = this.options[this.selectedIndex];
+  const fees = opt.dataset.fees;
+  feesDisplay.value = fees ? '₹' + fees : 'Select a doctor';
+  checkReady();
+});
+
+// Trigger initial fill if preselected
+if (doctorSelect.value) doctorSelect.dispatchEvent(new Event('change'));
+
+function selectPay(el) {
+  document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedPayment = el.dataset.val;
+  document.getElementById('payment_method').value = selectedPayment;
+  checkReady();
+}
+
+function checkReady() {
+  const hasDoctor = !!doctorSelect.value;
+  const hasPay = !!selectedPayment;
+  submitBtn.disabled = !(hasDoctor && hasPay);
+}
+
+document.getElementById('checkin-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Generating token...';
+
+  const data = {
+    clinic_id: '{{ clinic.clinic_id }}',
+    doctor_id: doctorSelect.value,
+    patient_name: document.getElementById('patient_name').value.trim(),
+    phone: document.getElementById('phone').value.trim(),
+    payment_method: selectedPayment,
+  };
+
+  try {
+    const res = await fetch('/api/checkin/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (json.success) {
+      const tk = json.token;
+      document.getElementById('result-token').textContent = tk.token_id;
+      const opt = doctorSelect.options[doctorSelect.selectedIndex];
+      document.getElementById('result-doctor').textContent = opt.textContent.trim();
+      const room = opt.dataset.room;
+      document.getElementById('result-room').textContent = room ? 'Room ' + room : '';
+      document.getElementById('track-link').href = json.redirect_url;
+      document.getElementById('checkin-card').style.display = 'none';
+      document.getElementById('info-panel').style.display = 'none';
+      document.getElementById('token-result').style.display = 'block';
+      toast('Token generated!', 'success');
+    } else {
+      toast(json.error || 'Failed', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Pay & Get Token →';
+    }
+  } catch(err) {
+    toast('Network error', 'error');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Pay & Get Token →';
+  }
+});
+</script>
+{% endblock %}

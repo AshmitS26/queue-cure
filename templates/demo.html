@@ -1,0 +1,333 @@
+{% extends 'base.html' %}
+{% block title %}Live Demo · Queue Cure '26{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<div style="text-align:center;padding:48px 0 32px">
+  <span style="display:inline-block;padding:6px 18px;background:rgba(99,102,241,.1);color:var(--primary-dark);border-radius:999px;font-size:13px;font-weight:600;border:1px solid rgba(99,102,241,.2);margin-bottom:20px">
+    🎯 Hackathon Demo Mode
+  </span>
+  <h1 style="font-size:clamp(28px,5vw,48px);font-weight:900;letter-spacing:-1px;margin-bottom:12px">
+    See <span style="background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Queue Cure</span> in action
+  </h1>
+  <p style="font-size:16px;color:var(--text-soft);max-width:520px;margin:0 auto 32px">
+    Click populate, open the patient link on your phone, then call next — watch everything sync live.
+  </p>
+
+  <!-- Main CTA buttons -->
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+    <button id="btn-populate" class="btn btn-primary btn-lg" onclick="populate()">
+      ⚡ Populate Demo Data
+    </button>
+    <button id="btn-reset" class="btn btn-ghost btn-lg" onclick="resetDemo()">
+      🔄 Reset Everything
+    </button>
+  </div>
+</div>
+
+<!-- Status bar -->
+<div id="status-bar" style="display:none;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 24px;margin-bottom:24px;display:flex;align-items:center;gap:12px">
+  <span id="status-icon" style="font-size:20px">✅</span>
+  <span id="status-msg" style="font-weight:600;font-size:15px">Demo populated with 7 patients across 4 doctors!</span>
+</div>
+
+<!-- Step-by-step guide -->
+<div class="card" style="margin-bottom:24px">
+  <div class="card-title">📋 Demo Script — 3 steps for judges</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:16px">
+
+    <div style="background:var(--gradient-soft);border-radius:var(--radius-sm);padding:20px;border:1px solid rgba(99,102,241,.15)">
+      <div style="font-size:28px;margin-bottom:10px">1️⃣</div>
+      <h4 style="font-weight:700;margin-bottom:6px">Populate & Share</h4>
+      <p style="font-size:13px;color:var(--text-soft);margin-bottom:14px">Click "Populate Demo Data" above, then scan the QR or open the patient link on your phone</p>
+      <div class="qr-box" style="padding:12px">
+        <img id="demo-qr" src="/qr/C001/?doctor=D001" alt="QR" style="max-width:140px">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Scan → patient check-in</div>
+      </div>
+    </div>
+
+    <div style="background:var(--gradient-soft);border-radius:var(--radius-sm);padding:20px;border:1px solid rgba(99,102,241,.15)">
+      <div style="font-size:28px;margin-bottom:10px">2️⃣</div>
+      <h4 style="font-weight:700;margin-bottom:6px">Watch Live Updates</h4>
+      <p style="font-size:13px;color:var(--text-soft);margin-bottom:14px">Open patient status link. Then click "Call Next" below — watch the patient's screen update instantly via WebSocket</p>
+      <div style="display:flex;flex-direction:column;gap:6px" id="patient-links">
+        <div style="font-size:12px;color:var(--text-muted)">Patient links appear after populate ↓</div>
+      </div>
+    </div>
+
+    <div style="background:var(--gradient-soft);border-radius:var(--radius-sm);padding:20px;border:1px solid rgba(99,102,241,.15)">
+      <div style="font-size:28px;margin-bottom:10px">3️⃣</div>
+      <h4 style="font-weight:700;margin-bottom:6px">Show All Portals</h4>
+      <p style="font-size:13px;color:var(--text-soft);margin-bottom:14px">Open all three in different tabs simultaneously — changes sync everywhere in real time</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <a href="/receptionist/" target="_blank" class="btn btn-secondary btn-sm">💼 Receptionist →</a>
+        <a href="/doctor/" target="_blank" class="btn btn-secondary btn-sm">🩺 Doctor A →</a>
+        <a href="/" target="_blank" class="btn btn-secondary btn-sm">🏠 Live Board →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Live queue control panel -->
+<div class="grid grid-2">
+
+  <!-- Left: queue per doctor -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="card-title" style="margin:0">🎮 Queue Control Panel</div>
+      <span class="conn" id="conn"><span class="dot"></span><span>Connecting</span></span>
+    </div>
+    <p style="font-size:13px;color:var(--text-soft);margin-bottom:16px">Call next patients across doctors and watch everything sync live</p>
+    <div id="demo-queues">
+      <div class="empty"><div class="icon">⚡</div>Click "Populate Demo Data" to begin</div>
+    </div>
+  </div>
+
+  <!-- Right: live board preview -->
+  <div class="card">
+    <div class="card-title">📺 Live Board (as seen on home page)</div>
+    <p style="font-size:13px;color:var(--text-soft);margin-bottom:14px">This is what patients see on the clinic display screen</p>
+    <table style="width:100%;border-collapse:separate;border-spacing:0">
+      <thead>
+        <tr>
+          <th style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border)">Token</th>
+          <th style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border)">Room</th>
+          <th style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border)">Wait</th>
+          <th style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;text-align:left;border-bottom:2px solid var(--border)">Status</th>
+        </tr>
+      </thead>
+      <tbody id="demo-board">
+        <tr><td colspan="4" class="empty" style="padding:28px"><div class="icon">📺</div>Board updates after populate</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Credentials card -->
+<div class="card" style="margin-top:20px">
+  <div class="card-title">🔑 Login Credentials for Demo</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px">
+
+    <div style="background:var(--bg-soft);border-radius:var(--radius-sm);padding:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">💼 Receptionist</div>
+      <div style="font-size:13px">Username: <strong>reception</strong></div>
+      <div style="font-size:13px">Password: <strong>clinic@123</strong></div>
+      <a href="/receptionist/" target="_blank" class="btn btn-primary btn-sm" style="margin-top:10px;width:100%">Open →</a>
+    </div>
+
+    {% for d in doctors_list %}
+    <div style="background:var(--bg-soft);border-radius:var(--radius-sm);padding:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🩺 Doctor {{ d.letter }}</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">{{ d.name }}</div>
+      <div style="font-size:12px;color:var(--text-soft)">User: <strong>doctor{{ d.letter }}</strong></div>
+      <div style="font-size:12px;color:var(--text-soft)">Pass: <strong>doc{{ d.letter }}@123</strong></div>
+      <a href="/doctor/" target="_blank" class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%">Open →</a>
+    </div>
+    {% endfor %}
+
+  </div>
+</div>
+
+<!-- Tech stack card -->
+<div class="card" style="margin-top:20px;margin-bottom:40px">
+  <div class="card-title">⚙️ Tech Stack</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px">
+    {% for item in tech %}
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-soft);border-radius:var(--radius-sm)">
+      <span style="font-size:20px">{{ item.icon }}</span>
+      <div>
+        <div style="font-weight:600;font-size:13px">{{ item.name }}</div>
+        <div style="font-size:11px;color:var(--text-muted)">{{ item.role }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+const DOCTORS = {{ doctors|safe }};
+let allData = {};
+let boardWs, queueWs = {};
+
+// ── Populate ──────────────────────────────────────────────────
+async function populate() {
+  const btn = document.getElementById('btn-populate');
+  btn.disabled = true;
+  btn.textContent = 'Populating...';
+
+  try {
+    const res = await fetch('/api/demo/populate/', { method: 'POST' });
+    const json = await res.json();
+    if (json.success) {
+      showStatus('✅', `Demo populated! ${json.tokens.length} patients added across ${DOCTORS.length} doctors.`);
+      renderPatientLinks(json.tokens);
+      toast('Demo ready! Open patient links to track live.', 'success', 5000);
+    }
+  } catch(e) {
+    showStatus('❌', 'Failed to populate. Is the server running?');
+    toast('Failed', 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '⚡ Populate Demo Data';
+}
+
+async function resetDemo() {
+  if (!confirm('Reset all queues?')) return;
+  try {
+    await fetch('/api/reset/C001/', { method: 'POST' });
+    showStatus('🔄', 'All queues cleared. Click Populate to start fresh.');
+    document.getElementById('patient-links').innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Patient links appear after populate ↓</div>';
+    document.getElementById('demo-board').innerHTML = '<tr><td colspan="4" class="empty" style="padding:28px"><div class="icon">📺</div>Board cleared</td></tr>';
+    document.getElementById('demo-queues').innerHTML = '<div class="empty"><div class="icon">🌿</div>Queue reset</div>';
+    toast('Reset complete', 'success');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+function showStatus(icon, msg) {
+  document.getElementById('status-bar').style.display = 'flex';
+  document.getElementById('status-icon').textContent = icon;
+  document.getElementById('status-msg').textContent = msg;
+}
+
+function renderPatientLinks(tokens) {
+  const container = document.getElementById('patient-links');
+  // Show first 3 tokens as clickable links
+  const shown = tokens.slice(0, 4);
+  container.innerHTML = shown.map(t => `
+    <a href="/status/${t.token_id}/" target="_blank"
+       style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;color:var(--text);transition:var(--transition)"
+       onmouseover="this.style.borderColor='var(--primary)'"
+       onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-weight:700;color:var(--primary-dark)">${escHtml(t.token_id)}</span>
+      <span style="color:var(--text-soft)">${escHtml(t.patient_name)}</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--primary)">Track →</span>
+    </a>
+  `).join('');
+}
+
+// ── Queue control panel ────────────────────────────────────────
+function renderQueues() {
+  const el = document.getElementById('demo-queues');
+  let html = '';
+  let hasAny = false;
+
+  DOCTORS.forEach(d => {
+    const data = allData[d.doctor_id] || { queue: [], current_called: null };
+    const q = data.queue || [];
+    const cur = data.current_called;
+    if (!q.length && !cur) return;
+    hasAny = true;
+
+    html += `<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--gradient);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center">${escHtml(d.letter)}</div>
+          <span style="font-weight:700;font-size:13px">${escHtml(d.name)}</span>
+          <span class="badge badge-info">${q.length} waiting</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="callNext('${d.doctor_id}')">⏭️ Call Next</button>
+      </div>`;
+
+    if (cur) {
+      html += `<div class="queue-item is-called" style="margin-bottom:6px">
+        <div class="queue-position">▶</div>
+        <div class="queue-info">
+          <div class="queue-name">${escHtml(cur.patient_name)}</div>
+          <div class="queue-meta">${cur.token_id} · Now seeing</div>
+        </div>
+        <a href="/status/${cur.token_id}/" target="_blank" class="btn btn-ghost btn-sm">Track</a>
+      </div>`;
+    }
+
+    q.slice(0, 3).forEach((t, i) => {
+      html += `<div class="queue-item">
+        <div class="queue-position">${i + 1}</div>
+        <div class="queue-info">
+          <div class="queue-name">${escHtml(t.patient_name)}</div>
+          <div class="queue-meta">${t.token_id}</div>
+        </div>
+        <a href="/status/${t.token_id}/" target="_blank" class="btn btn-ghost btn-sm">Track</a>
+      </div>`;
+    });
+
+    if (q.length > 3) {
+      html += `<div style="text-align:center;font-size:12px;color:var(--text-muted);padding:6px">+${q.length - 3} more waiting</div>`;
+    }
+
+    html += `</div>`;
+  });
+
+  el.innerHTML = hasAny ? html : '<div class="empty"><div class="icon">⚡</div>Click "Populate Demo Data" to begin</div>';
+}
+
+function renderBoard(entries) {
+  const tbody = document.getElementById('demo-board');
+  if (!entries || !entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty" style="padding:28px"><div class="icon">🌿</div>No active queue</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e => {
+    const isCalled = e.status === 'called';
+    return `<tr>
+      <td style="font-weight:700;font-size:15px;letter-spacing:.5px;color:var(--primary-dark);padding:10px 12px">${escHtml(e.token_id)}</td>
+      <td style="padding:10px 12px"><span style="background:#eef2ff;color:var(--primary-dark);padding:3px 10px;border-radius:6px;font-weight:600;font-size:12px">${escHtml(e.room)}</span></td>
+      <td style="padding:10px 12px;font-weight:600">${isCalled ? '<span style="color:var(--success)">🔔 Now</span>' : `~${Math.round(e.wait_minutes)} min`}</td>
+      <td style="padding:10px 12px">${isCalled ? '<span class="badge badge-success">In Consult</span>' : '<span class="badge badge-primary">Waiting</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+window.callNext = async function(docId) {
+  try {
+    const r = await fetch(`/api/next/C001/${docId}/`, { method: 'POST' });
+    const j = await r.json();
+    if (j.success && j.called) toast(`Called ${j.called.patient_name} · ${j.called.token_id}`, 'success');
+    else toast('Queue empty for this doctor', 'warning');
+  } catch(e) { toast('Failed', 'error'); }
+};
+
+// ── WebSockets ─────────────────────────────────────────────────
+function connectAll() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  // Per-doctor queues
+  DOCTORS.forEach(d => {
+    const ws = new WebSocket(`${proto}//${location.host}/ws/queue/C001/${d.doctor_id}/`);
+    ws.onopen = () => {
+      const c = document.getElementById('conn');
+      c.classList.add('is-live'); c.classList.remove('is-off');
+      c.querySelector('span:last-child').textContent = 'Live';
+    };
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.doctor_id) { allData[data.doctor_id] = data; renderQueues(); }
+      } catch(err) {}
+    };
+    ws.onclose = () => setTimeout(connectAll, 3000);
+    ws.onerror = () => ws.close();
+  });
+
+  // Live board
+  boardWs = new WebSocket(`${proto}//${location.host}/ws/liveboard/C001/`);
+  boardWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.board) renderBoard(d.board);
+    } catch(err) {}
+  };
+  boardWs.onclose = () => setTimeout(() => {
+    boardWs = new WebSocket(`${proto}//${location.host}/ws/liveboard/C001/`);
+  }, 2000);
+}
+
+connectAll();
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inject tech stack from Django context
+</script>
+{% endblock %}

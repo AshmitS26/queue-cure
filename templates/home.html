@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}Queue Cure — Real-time Clinic Queues{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="hero">
+  <h1>Welcome to <span class="gradient-text">{{ clinic.name }}</span></h1>
+  <p>{{ clinic.description }}</p>
+</section>
+
+<!-- LIVE QUEUE BOARD -->
+<section>
+  <div class="live-board" id="live-board-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge badge-live"><span class="pulse-dot" style="background:#fff"></span> LIVE QUEUE</span>
+        <span class="conn" id="board-conn"><span class="dot"></span><span>Connecting</span></span>
+      </div>
+      <span style="font-size:12px;color:var(--text-muted)" id="board-count">0 in queue</span>
+    </div>
+    <div id="live-board-body">
+      <table class="live-board">
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>Doctor</th>
+            <th>Room</th>
+            <th>Waiting Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="board-tbody">
+          <tr><td colspan="5" class="empty" style="padding:32px"><div class="icon">🌿</div>No patients in queue yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ROLE BUTTONS -->
+<section>
+  <div class="role-buttons">
+    <a href="/checkin/" class="role-btn">
+      <div class="icon">📱</div>
+      <span>Patient</span>
+    </a>
+    <a href="/receptionist/" class="role-btn">
+      <div class="icon">💼</div>
+      <span>Receptionist</span>
+    </a>
+    <a href="/doctor/" class="role-btn">
+      <div class="icon">🩺</div>
+      <span>Doctor</span>
+    </a>
+  </div>
+</section>
+
+<!-- DOCTOR LIST -->
+<section style="margin-top:16px">
+  <div class="card">
+    <div class="card-title">🏥 Our Doctors</div>
+    <p class="card-subtitle">Select a doctor to view details or check in directly</p>
+    <table class="doctor-table">
+      <thead>
+        <tr>
+          <th style="width:44px"></th>
+          <th>Doctor</th>
+          <th>Specialty</th>
+          <th>Timings</th>
+          <th>Room</th>
+          <th>Fees</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in doctors %}
+        <tr>
+          <td><div class="doc-letter">{{ d.letter }}</div></td>
+          <td style="font-weight:600">{{ d.name }}</td>
+          <td style="color:var(--text-soft)">{{ d.specialty }}</td>
+          <td>{{ d.timings }}</td>
+          <td><span class="room-cell">{{ d.room }}</span></td>
+          <td style="font-weight:700">₹{{ d.fees }}</td>
+          <td><a href="/checkin/?clinic=C001&doctor={{ d.doctor_id }}" class="btn btn-primary btn-sm">Book</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Live board via WebSocket
+const INITIAL_BOARD = {{ board|safe }};
+let boardWs;
+
+function renderBoard(entries) {
+  const tbody = document.getElementById('board-tbody');
+  document.getElementById('board-count').textContent = entries.length + ' in queue';
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty" style="padding:32px"><div class="icon">🌿</div>No patients in queue yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e => {
+    const isCalled = e.status === 'called';
+    const waitText = isCalled ? '<span style="color:var(--success);font-weight:700">🔔 Now Serving</span>'
+                              : `~${Math.round(e.wait_minutes)} min`;
+    return `<tr>
+      <td class="token-cell">${escHtml(e.token_id)}</td>
+      <td style="color:var(--text-soft);font-size:13px">${escHtml(e.doctor_name)}</td>
+      <td><span class="room-cell">${escHtml(e.room)}</span></td>
+      <td class="wait-cell ${isCalled?'is-called':''}">${waitText}</td>
+      <td>${isCalled ? '<span class="badge badge-success">In Consult</span>' : '<span class="badge badge-primary">Waiting</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function connectBoard() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  boardWs = new WebSocket(`${proto}//${location.host}/ws/liveboard/C001/`);
+  boardWs.onopen = () => {
+    const c = document.getElementById('board-conn');
+    c.classList.add('is-live'); c.classList.remove('is-off');
+    c.querySelector('span:last-child').textContent = 'Live';
+  };
+  boardWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.board) renderBoard(d.board);
+    } catch(err){}
+  };
+  boardWs.onclose = () => {
+    const c = document.getElementById('board-conn');
+    c.classList.remove('is-live'); c.classList.add('is-off');
+    c.querySelector('span:last-child').textContent = 'Reconnecting';
+    setTimeout(connectBoard, 2000);
+  };
+  boardWs.onerror = () => boardWs.close();
+}
+
+renderBoard(INITIAL_BOARD);
+connectBoard();
+
+// Countdown: reduce wait_minutes by 1 every 60s visually
+setInterval(() => {
+  document.querySelectorAll('.wait-cell:not(.is-called)').forEach(td => {
+    const m = parseInt(td.textContent.replace(/[^0-9]/g, ''));
+    if (m > 1) td.innerHTML = `~${m - 1} min`;
+  });
+}, 60000);
+</script>
+{% endblock %}

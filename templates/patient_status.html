@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}Queue · {{ token.token_id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Hi {{ token.patient_name }} 👋</h1>
+    <p class="page-subtitle">{{ doctor.name }} · {{ doctor.specialty }} · Room {{ doctor.room }}</p>
+  </div>
+  <span class="conn" id="conn"><span class="dot"></span><span>Connecting</span></span>
+</div>
+
+<div class="status-hero" id="hero">
+  <div style="font-size:13px;opacity:.9;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">
+    Your token · {{ token.token_id }}
+  </div>
+  <div class="status-pos" id="pos">—</div>
+  <div class="status-label" id="pos-label">Loading queue...</div>
+  <div class="status-wait" id="wait-pill">
+    <span>⏱️</span><span id="wait-text">Calculating...</span>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">📊 Queue Snapshot</div>
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+      <div class="stat-card">
+        <div class="stat-label">Now serving</div>
+        <div class="stat-value" id="now-serving">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Waiting</div>
+        <div class="stat-value" id="total-waiting">—</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px">
+        <input type="checkbox" id="notify-toggle" style="width:17px;height:17px">
+        🔔 Notify me when 2 away
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Live Queue</div>
+    <p class="card-subtitle">Your position is highlighted</p>
+    <div class="queue-list" id="qlist">
+      <div class="empty"><div class="icon">⏳</div>Loading...</div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;text-align:center"><a href="/" class="btn btn-ghost">← Back to home</a></div>
+
+<script>
+const TK = "{{ token.token_id }}";
+const CID = "{{ token.clinic_id }}";
+const DID = "{{ token.doctor_id }}";
+let notifyOn = false, lastNotifyPos = null, currentEma = {{ doctor.ema_avg|default:10 }};
+let waitSecondsLeft = 0;
+
+// Notification
+document.getElementById('notify-toggle').addEventListener('change', async function(e) {
+  if (e.target.checked) {
+    if (!('Notification' in window)) { toast('Not supported','warning'); e.target.checked=false; return; }
+    const p = await Notification.requestPermission();
+    if (p === 'granted') { notifyOn = true; toast('Notifications on','success'); }
+    else { e.target.checked = false; toast('Permission denied','warning'); }
+  } else { notifyOn = false; }
+});
+
+function maybeNotify(pos, currentName) {
+  if (!notifyOn || pos === null) return;
+  if (pos <= 2 && pos > 0 && lastNotifyPos !== pos) {
+    lastNotifyPos = pos;
+    try { new Notification('🩺 Almost your turn!', { body: `#${pos} in queue. Currently: ${currentName||'...'}` }); } catch(e){}
+  }
+  if (pos === 0 && lastNotifyPos !== 0) {
+    lastNotifyPos = 0;
+    try { new Notification('🎉 Your turn!', { body: 'Please proceed to the doctor.' }); } catch(e){}
+  }
+}
+
+function render(data) {
+  const queue = data.queue || [];
+  const current = data.current_called;
+  currentEma = data.ema_avg || currentEma;
+  const myIdx = queue.findIndex(t => t.token_id === TK);
+  const amCalled = current && current.token_id === TK;
+  const hero = document.getElementById('hero');
+
+  if (amCalled) {
+    hero.classList.add('is-called');
+    document.getElementById('pos').textContent = '🎉';
+    document.getElementById('pos-label').textContent = "It's your turn — please go in!";
+    document.getElementById('wait-text').textContent = 'Doctor is ready';
+    waitSecondsLeft = 0;
+    maybeNotify(0, '');
+  } else if (myIdx >= 0) {
+    hero.classList.remove('is-called');
+    const p = myIdx + 1;
+    const eta = Math.round(p * currentEma);
+    document.getElementById('pos').textContent = '#' + p;
+    document.getElementById('pos-label').textContent = p === 1 ? "You're next!" : `${p - 1} ahead of you`;
+    document.getElementById('wait-text').textContent = `~${eta} min`;
+    waitSecondsLeft = eta * 60;
+    maybeNotify(p, current ? current.patient_name : null);
+  } else {
+    hero.classList.remove('is-called');
+    document.getElementById('pos').textContent = '✓';
+    document.getElementById('pos-label').textContent = 'Consultation complete';
+    document.getElementById('wait-text').textContent = 'Thank you!';
+    waitSecondsLeft = 0;
+  }
+
+  document.getElementById('now-serving').textContent = current ? current.token_id : '—';
+  document.getElementById('total-waiting').textContent = queue.length;
+
+  const el = document.getElementById('qlist');
+  if (!queue.length && !current) { el.innerHTML = '<div class="empty"><div class="icon">🌿</div>Queue is empty</div>'; return; }
+  let h = '';
+  if (current) {
+    h += `<div class="queue-item is-called"><div class="queue-position">▶</div><div class="queue-info">
+      <div class="queue-name">${escHtml(current.patient_name)} ${current.token_id===TK?'<span class="badge badge-success">YOU</span>':''}</div>
+      <div class="queue-meta">Now seeing · ${current.token_id}</div></div></div>`;
+  }
+  queue.forEach((t,i) => {
+    const me = t.token_id === TK;
+    h += `<div class="queue-item"><div class="queue-position">${i+1}</div><div class="queue-info">
+      <div class="queue-name">${escHtml(t.patient_name)} ${me?'<span class="badge badge-primary">YOU</span>':''}</div>
+      <div class="queue-meta">${t.token_id} · ${fmtTime(t.check_in_time)}</div></div></div>`;
+  });
+  el.innerHTML = h;
+}
+
+// Live countdown every second
+setInterval(() => {
+  if (waitSecondsLeft > 0) {
+    waitSecondsLeft--;
+    const m = Math.floor(waitSecondsLeft / 60);
+    const s = waitSecondsLeft % 60;
+    document.getElementById('wait-text').textContent = m > 0 ? `~${m} min ${s}s` : `~${s}s`;
+  }
+}, 1000);
+
+// WebSocket
+let ws, rd = 1000;
+function connect() {
+  const proto = location.protocol==='https:'?'wss:':'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/queue/${CID}/${DID}/`);
+  ws.onopen = () => {
+    const c=document.getElementById('conn');c.classList.add('is-live');c.classList.remove('is-off');
+    c.querySelector('span:last-child').textContent='Live';rd=1000;
+  };
+  ws.onmessage = e => { try{const d=JSON.parse(e.data);if(d.type==='queue_update')render(d)}catch(err){} };
+  ws.onclose = () => {
+    const c=document.getElementById('conn');c.classList.remove('is-live');c.classList.add('is-off');
+    c.querySelector('span:last-child').textContent='Reconnecting';
+    setTimeout(connect,rd);rd=Math.min(rd*1.5,10000);
+  };
+  ws.onerror = () => ws.close();
+}
+connect();
+</script>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}Reception · Queue Cure{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Reception Dashboard</h1>
+    <p class="page-subtitle">{{ clinic.name }} · Manage walk-ins and queues</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="conn" id="conn"><span class="dot"></span><span>Connecting</span></span>
+    <a href="/logout/receptionist/" class="btn btn-ghost btn-sm" onclick="return confirm('Log out?')">🚪 Logout</a>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <!-- LEFT: Walk-in form + QR -->
+  <div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-title">➕ Add Walk-in Patient</div>
+      <p class="card-subtitle">Quick entry for patients at the counter</p>
+      <form id="walkin-form">
+        <div class="form-group">
+          <label class="form-label">Patient Name</label>
+          <input type="text" class="form-input" id="w_name" required placeholder="e.g. Ramesh Kumar">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone (optional)</label>
+          <input type="tel" class="form-input" id="w_phone" placeholder="10-digit mobile">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Doctor</label>
+          <select class="form-select" id="w_doctor" required>
+            {% for d in doctors %}
+            <option value="{{ d.doctor_id }}" data-fees="{{ d.fees }}">{{ d.letter }}) {{ d.name }} — ₹{{ d.fees }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment</label>
+          <div class="pay-toggle">
+            <div class="pay-option selected" data-val="cash" onclick="selPay(this)">💵 Cash</div>
+            <div class="pay-option" data-val="upi" onclick="selPay(this)">📲 UPI</div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Generate Token</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📱 Self Check-in QR</div>
+      <div class="qr-box">
+        <img id="qr-img" src="/qr/C001/" alt="QR">
+        <div style="margin-top:8px;font-size:12px;color:var(--text-soft)">Patients scan to check in themselves</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Manage all queues -->
+  <div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px">📋 Manage Queues</div>
+      <div id="all-queues">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CID = "{{ clinic.clinic_id }}";
+const DOCTORS = {{ doctors_json|safe }};
+let payMethod = 'cash';
+let allData = {}; // keyed by doctor_id
+
+function selPay(el) {
+  document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  payMethod = el.dataset.val;
+}
+
+// Walk-in submit
+document.getElementById('walkin-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('w_name').value.trim();
+  const phone = document.getElementById('w_phone').value.trim();
+  const docId = document.getElementById('w_doctor').value;
+  if (!name) return;
+  try {
+    const res = await fetch('/api/checkin/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ clinic_id: CID, doctor_id: docId, patient_name: name, phone: phone, payment_method: payMethod }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      toast(`Token ${json.token.token_id} → ${name}`, 'success');
+      document.getElementById('walkin-form').reset();
+      document.querySelector('.pay-option[data-val="cash"]').click();
+    } else toast(json.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+});
+
+// Render all queues grouped by doctor
+function renderQueues() {
+  const container = document.getElementById('all-queues');
+  let html = '';
+  DOCTORS.forEach(d => {
+    const data = allData[d.doctor_id] || { queue: [], current_called: null };
+    const q = data.queue || [];
+    const cur = data.current_called;
+
+    html += `<div style="margin-bottom:22px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="doc-letter" style="width:30px;height:30px;font-size:13px;border-radius:8px">${escHtml(d.letter)}</div>
+          <span style="font-weight:700;font-size:14px">${escHtml(d.name)}</span>
+          <span class="badge badge-info">${q.length} waiting</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="callNext('${d.doctor_id}')">⏭️ Call Next</button>
+      </div>`;
+
+    if (cur) {
+      html += `<div class="queue-item is-called" style="margin-bottom:6px">
+        <div class="queue-position">▶</div>
+        <div class="queue-info">
+          <div class="queue-name">${escHtml(cur.patient_name)}</div>
+          <div class="queue-meta">${cur.token_id} · Now seeing</div>
+        </div>
+      </div>`;
+    }
+
+    if (q.length === 0 && !cur) {
+      html += `<div style="text-align:center;padding:14px;color:var(--text-muted);font-size:13px">Empty queue</div>`;
+    }
+
+    q.forEach((t, i) => {
+      html += `<div class="queue-item">
+        <div class="queue-position">${i + 1}</div>
+        <div class="queue-info">
+          <div class="queue-name">${escHtml(t.patient_name)}</div>
+          <div class="queue-meta">${t.token_id} · ${t.phone || 'no phone'} · ${fmtTime(t.check_in_time)}</div>
+        </div>
+        <div class="queue-actions">
+          <button class="btn btn-danger btn-sm" onclick="cancelToken('${t.token_id}','${escHtml(t.patient_name)}')">✕</button>
+        </div>
+      </div>`;
+    });
+
+    html += `</div>`;
+  });
+  container.innerHTML = html || '<div class="empty"><div class="icon">🌿</div>No queues</div>';
+}
+
+window.callNext = async function(docId) {
+  try {
+    const r = await fetch(`/api/next/${CID}/${docId}/`, { method: 'POST' });
+    const j = await r.json();
+    if (j.success && j.called) toast(`Called ${j.called.patient_name} · ${j.called.token_id}`, 'success');
+    else toast('Queue empty', 'warning');
+  } catch(e) { toast('Failed', 'error'); }
+};
+
+window.cancelToken = async function(tokenId, name) {
+  if (!confirm(`Remove ${name}?`)) return;
+  try {
+    await fetch(`/api/status/${tokenId}/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ status: 'no_show' }),
+    });
+    toast(`${name} removed`, 'info');
+  } catch(e) { toast('Failed', 'error'); }
+};
+
+// WebSocket per doctor
+let sockets = {};
+function connectAll() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let anyOpen = false;
+  DOCTORS.forEach(d => {
+    const ws = new WebSocket(`${proto}//${location.host}/ws/queue/${CID}/${d.doctor_id}/`);
+    ws.onopen = () => {
+      if (!anyOpen) {
+        anyOpen = true;
+        const c = document.getElementById('conn');
+        c.classList.add('is-live'); c.classList.remove('is-off');
+        c.querySelector('span:last-child').textContent = 'Live';
+      }
+    };
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.doctor_id) { allData[data.doctor_id] = data; renderQueues(); }
+      } catch(err) {}
+    };
+    ws.onclose = () => { setTimeout(() => connectAll(), 3000); };
+    ws.onerror = () => ws.close();
+    sockets[d.doctor_id] = ws;
+  });
+}
+connectAll();
+</script>
+{% endblock %}
