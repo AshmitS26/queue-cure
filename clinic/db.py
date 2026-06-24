@@ -138,8 +138,8 @@ def bootstrap_defaults():
     if db.clinics.count_documents({}) == 0:
         db.clinics.insert_one({
             'clinic_id': 'C001',
-            'name': 'CareFirst Clinic',
-            'address': '12 MG Road, Bengaluru',
+            'name': 'Demo Clinic',
+            'address': 'Delhi',
             'description': 'A modern multi-speciality clinic providing quality healthcare with minimal wait times. Walk in or check in online — track your queue in real time.',
             'created_at': datetime.now(timezone.utc),
         })
