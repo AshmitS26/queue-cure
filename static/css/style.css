@@ -432,3 +432,133 @@ footer a{color:var(--primary);text-decoration:none}
   .token-big{font-size:54px}
   .now-serving .token{font-size:32px}
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — Full fix for all screen sizes
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Tablet */
+@media(max-width:768px){
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .role-buttons{flex-direction:row;gap:10px}
+  .role-btn{min-width:120px;padding:16px 12px}
+  .doctor-table{font-size:13px}
+  .doctor-table th,.doctor-table td{padding:10px 8px}
+  .now-serving{padding:20px}
+  .now-serving .token{font-size:32px}
+  .live-board table{font-size:13px}
+  .live-board th,.live-board td{padding:8px 10px}
+}
+
+/* Mobile */
+@media(max-width:480px){
+  /* Navbar */
+  .navbar-inner{padding:0 12px}
+  .logo{font-size:18px}
+  .logo-icon{width:28px;height:28px;font-size:15px}
+  .nav-links{gap:2px}
+  .nav-link{padding:6px 8px;font-size:12px}
+  .nav-links .btn{padding:6px 8px;font-size:12px}
+
+  /* Container */
+  .container{padding:0 12px}
+
+  /* Hero */
+  .hero{padding:28px 0 20px}
+  .hero h1{font-size:26px;letter-spacing:-.5px}
+  .hero p{font-size:14px}
+
+  /* Role buttons — horizontal row */
+  .role-buttons{flex-direction:row;gap:8px;margin:16px 0}
+  .role-btn{
+    min-width:0;flex:1;padding:14px 8px;
+    flex-direction:column;gap:6px;
+  }
+  .role-btn .icon{width:36px;height:36px;font-size:18px;border-radius:10px}
+  .role-btn span{font-size:12px}
+
+  /* Cards */
+  .card{padding:16px;border-radius:12px}
+  .card-title{font-size:15px}
+
+  /* Stats grid — 2 columns on mobile */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .stat-card{padding:14px}
+  .stat-value{font-size:24px}
+
+  /* Live board — hide doctor column, simplify */
+  .live-board th:nth-child(2),.live-board td:nth-child(2){display:none}
+  .live-board th,.live-board td{padding:8px 8px;font-size:12px}
+  .live-board .token-cell{font-size:14px}
+
+  /* Doctor table — hide specialty on mobile */
+  .doctor-table th:nth-child(3),.doctor-table td:nth-child(3){display:none}
+  .doctor-table th:nth-child(4),.doctor-table td:nth-child(4){display:none}
+  .doctor-table th,.doctor-table td{padding:10px 6px;font-size:12px}
+  .doc-letter{width:28px;height:28px;font-size:12px;border-radius:8px}
+
+  /* Status hero */
+  .status-hero{padding:28px 16px}
+  .status-pos{font-size:56px;letter-spacing:-2px}
+  .status-label{font-size:13px}
+  .status-wait{padding:8px 16px;font-size:13px}
+
+  /* Queue items */
+  .queue-item{padding:12px 14px;gap:10px}
+  .queue-position{width:34px;height:34px;font-size:14px;border-radius:8px}
+  .queue-name{font-size:13px}
+  .queue-meta{font-size:11px}
+
+  /* Now serving */
+  .now-serving{padding:20px 16px}
+  .now-serving .label{font-size:11px}
+  .now-serving .token{font-size:28px}
+  .now-serving .name{font-size:15px;margin-bottom:14px}
+  .now-serving .actions{gap:6px}
+  .now-serving .actions .btn{padding:8px 12px;font-size:12px}
+
+  /* Token display */
+  .token-display{padding:28px 16px}
+  .token-big{font-size:48px}
+
+  /* Buttons */
+  .btn-lg{padding:12px 20px;font-size:15px}
+  .btn-block{font-size:14px}
+
+  /* Form inputs */
+  .form-input,.form-select{padding:11px 14px;font-size:14px}
+
+  /* Page header */
+  .page-header{padding:20px 0 14px;flex-direction:column;align-items:flex-start;gap:10px}
+  .page-title{font-size:22px}
+
+  /* Payment toggle */
+  .pay-toggle{gap:6px}
+  .pay-option{padding:10px 6px;font-size:12px}
+
+  /* Grid */
+  .grid-2,.grid-3{grid-template-columns:1fr;gap:14px}
+
+  /* Demo page */
+  .demo-steps{grid-template-columns:1fr}
+
+  /* Login page */
+  .login-box{padding:20px}
+
+  /* Footer */
+  footer{margin-top:40px;padding:20px 0;font-size:11px}
+
+  /* Toast */
+  #toast-container{bottom:16px;right:12px;left:12px}
+  .toast{min-width:0;max-width:100%}
+}
+
+/* Very small phones */
+@media(max-width:360px){
+  .hero h1{font-size:22px}
+  .nav-link{display:none}
+  .nav-links .btn{display:flex}
+  .role-btn span{font-size:11px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}
