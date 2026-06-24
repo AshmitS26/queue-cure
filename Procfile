@@ -1,1 +1,1 @@
-web: daphne -b 0.0.0.0 -p $PORT queue_cure.asgi:application
+web: python manage.py migrate && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p $PORT queue_cure.asgi:application
